@@ -27,16 +27,18 @@ try:
 except Exception:  # noqa: BLE001
     _boot_error = traceback.format_exc()
 
-application = None
+# ⚠️ مهم جداً: ممنوع نسمي المتغير ده "application" — Vercel بيختار أي متغير بالاسم ده
+# كنقطة دخول وبيقع لأنه مش ASGI callable! الدالة app تحت هي نقطة الدخول الرسمية
+_app_instance = None
 _app_lock = asyncio.Lock()
 
 
 async def get_application():
     """بناء Application مرة واحدة لكل نسخة سيرفر حية"""
-    global application
-    if application is None:
+    global _app_instance
+    if _app_instance is None:
         async with _app_lock:
-            if application is None:
+            if _app_instance is None:
                 config.validate()
                 app = (
                     Application.builder()
@@ -46,8 +48,8 @@ async def get_application():
                 )
                 register_handlers(app)
                 await app.initialize()
-                application = app
-    return application
+                _app_instance = app
+    return _app_instance
 
 
 def _secret():
