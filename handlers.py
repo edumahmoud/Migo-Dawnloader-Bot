@@ -20,7 +20,7 @@ from downloader import (IMAGE_EXTS, detect_platform, download_media_sync,
                         download_playlist_sync, estimate_size, extract_info_sync, is_image)
 from sender import send_audio_file, send_photo_file, send_video_file
 from stats import stats
-from utils import fmt_duration, fmt_size
+from utils import LINE, fmt_duration, fmt_size
 
 log = logging.getLogger("handlers")
 
@@ -160,23 +160,31 @@ async def _show_quality_menu(status, url, info, user):
     uploader = html.escape(str(info.get("uploader") or "")[:60])
 
     link = html.escape(str(info.get("webpage_url") or url))
-    cap = f"{platform.emoji} <b>{platform.name}</b>\n🎬 {title}"
+    cap = f"{platform.emoji} <b>{platform.name}</b>\n{LINE}\n🎬 <b>{title}</b>"
     if dur and dur != "—":
         cap += f"\n⏱ المدة: {dur}"
     if uploader:
         cap += f"\n👤 {uploader}"
     # اللينك في الرسالة عشان نقدر نسترجعه لو السيرفر أعاد التشغيل (زي على Vercel)
-    cap += f"\n🔗 <code>{link}</code>"
-    cap += "\n\n👇 <b>اختار الجودة:</b>"
+    cap += f"\n🔗 <code>{link}</code>\n{LINE}"
+    # إحصائيات سريعة في بطاقة الفيديو — كاملة للأدمن، وسطر بسيط لغيره
+    if _is_admin(user.id):
+        cap += "\n" + strings.stats_line(
+            stats.total_count(), stats.user_count(), stats.user_downloads(user.id)
+        )
+    else:
+        cap += "\n" + strings.stats_line(stats.total_count())
+    cap += f"\n{LINE}\n\n👇 <b>اختار الجودة اللي تحبها:</b>"
 
     def btn(label, quality):
         est = estimate_size(info, quality)
         extra = f" • {est}" if est else ""
         return InlineKeyboardButton(f"{label}{extra}", callback_data=f"dl|{req_id}|{quality}")
 
+    # ألوان الجودات: 🟢 الأعلى → 🟡 متوسطة → 🟠 الاقتصادية
     markup = InlineKeyboardMarkup([
-        [btn("🎬 1080p", "1080"), btn("🎬 720p", "720")],
-        [btn("🎬 480p", "480"), btn("🎵 صوت MP3", "audio")],
+        [btn("🟢 1080p", "1080"), btn("🟡 720p", "720")],
+        [btn("🟠 480p", "480"), btn("🎧 صوت MP3", "audio")],
     ])
 
     thumb = info.get("thumbnail")
@@ -308,7 +316,12 @@ async def on_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         stats.record(user.id, user.first_name or "", platform.name)
         elapsed = max(1, int(time.time() - start))
-        await _progress_edit(msg, strings.done(result.get("title") or "", fmt_size(size), elapsed))
+        # العدد شامل التحميل ده لأن record اتعملت لسه — عشان يظهر "ده تحميلك رقم كام"
+        personal = stats.user_downloads(user.id)
+        await _progress_edit(
+            msg,
+            strings.done(result.get("title") or "", fmt_size(size), elapsed, personal=personal),
+        )
 
     except asyncio.TimeoutError:
         await _progress_edit(msg, strings.SLOW)
@@ -382,7 +395,7 @@ async def _run_carousel(status, url, user, count):
             sent += 1
 
         stats.record(user.id, user.first_name or "", platform.name)
-        await _progress_edit(status, f"✅ <b>خلصنا!</b> اتبعت {sent} ملف 🎉")
+        await _progress_edit(status, f"🎉 <b>خلصنا!</b> اتبعت <b>{sent}</b> ملف جاهزين 🎊")
 
     except asyncio.TimeoutError:
         await _progress_edit(status, strings.SLOW)
@@ -425,7 +438,7 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not ids:
         await update.effective_message.reply_text("😔 مفيش مستخدمين مسجلين لسه.")
         return
-    status = await update.effective_message.reply_text(f"📤 جاري الإرسال لـ {len(ids)} مستخدم...")
+    status = await update.effective_message.reply_text(f"📤 <b>جاري الإرسال لـ {len(ids)} مستخدم...</b> ⏳")
     ok = fail = 0
     for uid in ids:
         try:
@@ -441,7 +454,7 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except TelegramError:
             fail += 1
         await asyncio.sleep(0.05)
-    await status.edit_text(f"📤 <b>خلص الإرسال!</b>\n✅ وصلت لـ {ok}\n❌ فشلت لـ {fail}")
+    await status.edit_text(f"📤 <b>خلص الإرسال!</b> 🎯\n✅ وصلت لـ {ok}\n❌ فشلت لـ {fail}")
 
 
 async def cmd_update(update: Update, context: ContextTypes.DEFAULT_TYPE):

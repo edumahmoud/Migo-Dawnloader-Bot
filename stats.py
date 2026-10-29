@@ -5,6 +5,9 @@ import os
 import threading
 
 import config
+from utils import LINE
+
+MEDALS = ("🥇", "🥈", "🥉")
 
 
 class Stats:
@@ -53,28 +56,52 @@ class Stats:
         with self.lock:
             return [int(k) for k in self.data["users"].keys() if str(k).isdigit()]
 
+    def total_count(self):
+        """إجمالي التحميلات — لسطر الإحصائيات السريع في بطاقة الفيديو"""
+        with self.lock:
+            return self.data["total"]
+
+    def user_count(self):
+        """عدد المستخدمين المسجلين"""
+        with self.lock:
+            return len(self.data["users"])
+
+    def user_downloads(self, user_id):
+        """عدد تحميلات مستخدم معين (لرسالة النجاح: ده تحميلك رقم كام)"""
+        with self.lock:
+            u = self.data["users"].get(str(user_id))
+            return int((u or {}).get("count", 0))
+
     def summary_text(self, full=False, bot_username=""):
         with self.lock:
             total = self.data["total"]
             platforms = dict(self.data["platforms"])
             users = dict(self.data["users"])
-        lines = ["📊 <b>إحصائيات البوت</b>", ""]
+        n_users = len(users)
+        lines = ["📊 <b>إحصائيات البوت</b> 📈", LINE, ""]
         lines.append(f"⬇️ إجمالي التحميلات: <b>{total}</b>")
-        lines.append(f"👥 عدد المستخدمين: <b>{len(users)}</b>")
+        lines.append(f"👥 عدد المستخدمين: <b>{n_users}</b>")
+        if n_users:
+            avg = total / n_users
+            lines.append(f"📈 متوسط التحميل لكل مستخدم: <b>{avg:.1f}</b>")
         if platforms:
             lines.append("")
-            lines.append("<b>حسب المنصة:</b>")
-            for name, cnt in sorted(platforms.items(), key=lambda x: -x[1]):
-                lines.append(f"• {name}: <b>{cnt}</b>")
+            lines.append("🟦 <b>حسب المنصة:</b>")
+            ranked = sorted(platforms.items(), key=lambda x: -x[1])
+            for i, (name, cnt) in enumerate(ranked):
+                medal = MEDALS[i] if i < 3 else "▫️"
+                lines.append(f"{medal} {name}: <b>{cnt}</b>")
         if full and users:
             lines.append("")
-            lines.append("<b>🏆 أكثر المستخدمين:</b>")
+            lines.append("🏆 <b>أكثر المستخدمين:</b>")
             top = sorted(users.items(), key=lambda kv: -kv[1].get("count", 0))[:10]
             for i, (uid, u) in enumerate(top, 1):
                 nm = html.escape(str(u.get("name") or "مستخدم"))
-                lines.append(f"{i}. {nm} — <b>{u.get('count', 0)}</b> 📥")
+                medal = MEDALS[i - 1] if i <= 3 else f"{i}."
+                lines.append(f"{medal} {nm} — <b>{u.get('count', 0)}</b> 📥")
         if bot_username:
             lines.append("")
+            lines.append(LINE)
             lines.append(f"🤖 @{bot_username}")
         return "\n".join(lines)
 
