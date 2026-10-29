@@ -1,6 +1,6 @@
 """نقطة دخول Vercel — البوت في وضع الويبهوك (ASGI)
 
-- GET  /api            → فحص صحة البوت
+- GET  /api            → فحص صحة البوت (لو فيه عطب بيقول السبب بالتفصيل)
 - GET  /api?key=TOKEN  → تفعيل الويبهوك (تتصل مرة واحدة بعد النشر)
 - POST /api            → تحديثات تليجرام
 """
@@ -8,17 +8,24 @@ import asyncio
 import hashlib
 import json
 import os
+import traceback
 
 # إعدادات مناسبة لحدود Vercel (60 ثانية + قراءة فقط)
 os.environ.setdefault("FFMPEG_DIR", "/tmp/ffmpeg")
 os.environ.setdefault("MAX_FILE_MB", "25")
 
-import config  # noqa: E402
-import handlers  # noqa: E402
-from bot import register_handlers  # noqa: E402
-from downloader import ensure_ffmpeg  # noqa: E402
-from telegram import Update  # noqa: E402
-from telegram.ext import Application  # noqa: E402
+# الاستيرادات الثقيلة محميّة عمداً — لو أي مكتبة ناقصة أو أي حاجة قفلت وقت التحميل،
+# الصفحة نفسها هترجّع سبب العطل بالتفصيل بدل صفحة 500 الغامضة من فيرسيل
+_boot_error = None
+try:
+    import config  # noqa: E402
+    import handlers  # noqa: E402
+    from bot import register_handlers  # noqa: E402
+    from downloader import ensure_ffmpeg  # noqa: E402
+    from telegram import Update  # noqa: E402
+    from telegram.ext import Application  # noqa: E402
+except Exception:  # noqa: BLE001
+    _boot_error = traceback.format_exc()
 
 application = None
 _app_lock = asyncio.Lock()
@@ -80,6 +87,14 @@ async def app(scope, receive, send):
     path = scope.get("path", "/").rstrip("/")
     body = await _read_body(receive)
 
+    # عطب في التحميل الأولي؟ نرجّع السبب كامل بدل ما فيرسيل يعرض صفحة 500 غامضة
+    if _boot_error:
+        await _respond(send, 500, {
+            "error": "فشل تحميل موديولات البوت — ابعت الـ traceback ده للمطور:",
+            "traceback": _boot_error[-2500:],
+        })
+        return
+
     # فحص الصحة + تفعيل الويبهوك
     if method == "GET" and path in ("", "/api", "/api/index"):
         from urllib.parse import parse_qs
@@ -131,6 +146,6 @@ async def app(scope, receive, send):
 
 
 # نبدأ تنزيل ffmpeg في الخلفية أول ما السيرفر يصحى (للدمج و MP3)
-if os.getenv("VERCEL"):
+if os.getenv("VERCEL") and not _boot_error:
     import threading
     threading.Thread(target=ensure_ffmpeg, kwargs={"timeout": 120}, daemon=True).start()

@@ -1,0 +1,13 @@
+[project]
+name = "migo-downloader-bot"
+version = "1.0.0"
+description = "بوت تليجرام لتحميل الفيديوهات من يوتيوب وفيسبوك وانستجرام وتيك توك و X"
+requires-python = ">=3.12"
+dependencies = [
+    "python-telegram-bot[rate-limiter]>=21.10,<23",
+    "yt-dlp>=2024.12.13",
+    "python-dotenv>=1.0.1",
+]
+
+[tool.uv]
+package = false

@@ -36,9 +36,9 @@ except OSError:
 
 def validate():
     if not BOT_TOKEN or ":" not in BOT_TOKEN:
-        raise SystemExit(
-            "✋ مفيش توكن!\n"
+        raise RuntimeError(
+            "✋ مفيش توكن صحيح!\n"
             "1) هات التوكن من @BotFather (شوف README.md)\n"
-            "2) حطه في ملف .env كده: BOT_TOKEN=123456:ABC-DEF\n"
-            "أو كمتغير بيئة BOT_TOKEN"
+            "2) حطه في متغيرات البيئة: BOT_TOKEN=123456:ABC-DEF\n"
+            "3) على Vercel: Settings → Environment Variables → وبعدها اعمل Redeploy"
         )
