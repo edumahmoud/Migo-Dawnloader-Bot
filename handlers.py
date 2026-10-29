@@ -43,14 +43,26 @@ def _is_admin(user_id):
 
 
 async def _progress_edit(msg, text):
-    """تعديل رسالة الحالة بأمان (نص عادي أو صورة بكابشن)"""
+    """تعديل رسالة الحالة بأمان (نص عادي أو صورة بكابشن) — ولو الHTML اترفض نرجع للنص العادي"""
     try:
         return await msg.edit_text(text, disable_web_page_preview=True)
     except BadRequest as e:
         s = str(e).lower()
+        if "can't parse entities" in s:
+            try:
+                return await msg.edit_text(text, parse_mode=None)
+            except TelegramError:
+                return msg
         if "no text" in s:
             try:
                 return await msg.edit_caption(caption=text)
+            except BadRequest as e2:
+                if "can't parse entities" in str(e2).lower():
+                    try:
+                        return await msg.edit_caption(caption=text, parse_mode=None)
+                    except TelegramError:
+                        return msg
+                return msg
             except TelegramError:
                 return msg
         return msg
@@ -417,7 +429,14 @@ async def cmd_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ok = fail = 0
     for uid in ids:
         try:
-            await context.bot.send_message(uid, text)
+            try:
+                await context.bot.send_message(uid, text)
+            except BadRequest as e:
+                # لو الأدمن كتب حرف زي < في نص الإذاعي — نبعته من غير تنسيق بدل ما يفشل
+                if "can't parse entities" in str(e).lower():
+                    await context.bot.send_message(uid, text, parse_mode=None)
+                else:
+                    raise
             ok += 1
         except TelegramError:
             fail += 1

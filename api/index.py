@@ -20,10 +20,9 @@ _boot_error = None
 try:
     import config  # noqa: E402
     import handlers  # noqa: E402
-    from bot import register_handlers  # noqa: E402
+    from bot import build_application, register_handlers  # noqa: E402
     from downloader import ensure_ffmpeg  # noqa: E402
     from telegram import Update  # noqa: E402
-    from telegram.ext import Application  # noqa: E402
 except Exception:  # noqa: BLE001
     _boot_error = traceback.format_exc()
 
@@ -34,20 +33,20 @@ _app_lock = asyncio.Lock()
 
 
 async def get_application():
-    """بناء Application مرة واحدة لكل نسخة سيرفر حية"""
+    """بناء Application مرة واحدة لكل نسخة سيرفر حية — بنفس إعدادات وضع التشغيل المباشر
+
+    (التنسيق HTML + rate limiter) عشان الرسايل تظهر منسّقة مش بالتاجات الخام.
+    """
     global _app_instance
     if _app_instance is None:
         async with _app_lock:
             if _app_instance is None:
                 config.validate()
-                app = (
-                    Application.builder()
-                    .token(config.BOT_TOKEN)
-                    .updater(None)  # من غير polling — الويبهوك فقط
-                    .build()
-                )
+                app = build_application(webhook_mode=True)  # من غير polling — الويبهوك فقط
                 register_handlers(app)
                 await app.initialize()
+                # نفس اللي بيعمله post_init في وضع التشغيل المباشر — اسم البوت للرسايل
+                handlers.BOT_USERNAME = app.bot.username or ""
                 _app_instance = app
     return _app_instance
 

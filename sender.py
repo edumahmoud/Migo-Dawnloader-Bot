@@ -2,12 +2,27 @@
 import logging
 import os
 
-from telegram.error import TelegramError
+from telegram.error import BadRequest, TelegramError
 
 log = logging.getLogger("sender")
 
 PHOTO_LIMIT = 10 * 1024 * 1024  # حد الصور في تليجرام
 BIG_TIMEOUTS = dict(write_timeout=900, read_timeout=900, pool_timeout=900, connect_timeout=120)
+
+
+async def _send(msg, method, **kwargs):
+    """إرسال بأمان — لو تليجرام رفض الHTML في الكابشن نعيد المحاولة من غير تنسيق
+
+    (parse_mode=None صراحةً بتلغي الافتراضي HTML — دي شبكة الأمان لو عنوان غريب
+    جاب حرف زي < أو & وحطّم التنسيق — المهم إن الملف يوصل)
+    """
+    try:
+        return await getattr(msg, method)(**kwargs)
+    except BadRequest as e:
+        if "can't parse entities" in str(e).lower():
+            kwargs["parse_mode"] = None
+            return await getattr(msg, method)(**kwargs)
+        raise
 
 
 async def _fetch_thumb(url):
@@ -40,16 +55,16 @@ async def send_video_file(msg, path, info, caption, thumb_url=None):
     if thumb:
         kwargs["thumbnail"] = thumb
     try:
-        return await msg.reply_video(**kwargs)
+        return await _send(msg, "reply_video", **kwargs)
     except TelegramError as e:
         log.warning("reply_video failed (%s) — جرّب تاني بأقل إعدادات", e)
         for k in ("duration", "width", "height", "thumbnail"):
             kwargs.pop(k, None)
         try:
-            return await msg.reply_video(**kwargs)
+            return await _send(msg, "reply_video", **kwargs)
         except TelegramError:
             # آخر حل: ابعت الملف كدوكيومنت
-            return await msg.reply_document(document=data, caption=caption, **BIG_TIMEOUTS)
+            return await _send(msg, "reply_document", document=data, caption=caption, **BIG_TIMEOUTS)
 
 
 async def send_audio_file(msg, path, info, caption, thumb_url=None):
@@ -64,14 +79,14 @@ async def send_audio_file(msg, path, info, caption, thumb_url=None):
     if thumb:
         kwargs["thumbnail"] = thumb
     try:
-        return await msg.reply_audio(**kwargs)
+        return await _send(msg, "reply_audio", **kwargs)
     except TelegramError:
         for k in ("duration", "performer", "thumbnail", "title"):
             kwargs.pop(k, None)
         try:
-            return await msg.reply_audio(**kwargs)
+            return await _send(msg, "reply_audio", **kwargs)
         except TelegramError:
-            return await msg.reply_document(document=data, caption=caption, **BIG_TIMEOUTS)
+            return await _send(msg, "reply_document", document=data, caption=caption, **BIG_TIMEOUTS)
 
 
 async def send_photo_file(msg, path, caption):
@@ -79,9 +94,10 @@ async def send_photo_file(msg, path, caption):
         data = f.read()
     if len(data) <= PHOTO_LIMIT:
         try:
-            return await msg.reply_photo(photo=data, caption=caption)
+            return await _send(msg, "reply_photo", photo=data, caption=caption)
         except TelegramError:
             pass
-    return await msg.reply_document(
-        document=data, filename=os.path.basename(path), caption=caption, **BIG_TIMEOUTS
+    return await _send(
+        msg, "reply_document", document=data, filename=os.path.basename(path),
+        caption=caption, **BIG_TIMEOUTS,
     )

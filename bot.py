@@ -49,6 +49,27 @@ async def post_init(app):
     log.info("Bot started as @%s 🚀", me.username)
 
 
+def build_application(webhook_mode: bool = False):
+    """بناء موحد للتطبيق — نفس إعدادات التنسيق في وضع التشغيل المباشر وفي وضع Vercel
+
+    webhook_mode=True → من غير Updater (استقبال التحديثات من الويبهوك بس، زي ما Vercel محتاج)
+
+    ⚠️ ملاحظة مهمة: Defaults(parse_mode=HTML) هي اللي بتخلي التاجات <b> تظهر منسّقة.
+    من غيرها التاجات تظهر كنص خام في الرسايل — ودي كانت مشكلة وضع Vercel لما كان
+    بيبني التطبيق من غير الإعدادات دي.
+    """
+    builder = ApplicationBuilder().token(config.BOT_TOKEN)
+    if webhook_mode:
+        builder = builder.updater(None)  # من غير polling — الويبهوك فقط
+    return (
+        builder
+        .defaults(Defaults(parse_mode=ParseMode.HTML))  # التنسيق الموحد للرسايل
+        .rate_limiter(AIORateLimiter())  # حماية من حدود تليجرام (مهم للإذاعي/broadcast)
+        .post_init(post_init)
+        .build()
+    )
+
+
 def register_handlers(app):
     """تسجيل كل المعالجات — بيتستخدم في التشغيل العادي وفي وضع Vercel الويبهوك"""
     app.add_handler(CommandHandler("start", handlers.cmd_start))
@@ -70,15 +91,7 @@ def main():
     if port.isdigit():
         threading.Thread(target=start_keepalive, args=(int(port),), daemon=True).start()
 
-    app = (
-        ApplicationBuilder()
-        .token(config.BOT_TOKEN)
-        .defaults(Defaults(parse_mode=ParseMode.HTML))
-        .rate_limiter(AIORateLimiter())
-        .post_init(post_init)
-        .build()
-    )
-
+    app = build_application()  # نفس البناء الموحد — فيه تنسيق HTML + rate limiter
     register_handlers(app)
 
     log.info("جاري تشغيل البوت... 🎬")
