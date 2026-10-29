@@ -4,7 +4,6 @@ import logging
 import os
 import threading
 
-from telegram import BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import (AIORateLimiter, ApplicationBuilder, CallbackQueryHandler,
                           CommandHandler, Defaults, MessageHandler, filters)
@@ -46,12 +45,21 @@ def start_keepalive(port: int):
 async def post_init(app):
     me = await app.bot.get_me()
     handlers.BOT_USERNAME = me.username or ""
-    await app.bot.set_my_commands([
-        BotCommand("start", "تشغيل البوت"),
-        BotCommand("help", "طريقة الاستخدام"),
-        BotCommand("stats", "إحصائيات التحميل"),
-    ])
+    await app.bot.set_my_commands(handlers.BOT_COMMANDS)
     log.info("Bot started as @%s 🚀", me.username)
+
+
+def register_handlers(app):
+    """تسجيل كل المعالجات — بيتستخدم في التشغيل العادي وفي وضع Vercel الويبهوك"""
+    app.add_handler(CommandHandler("start", handlers.cmd_start))
+    app.add_handler(CommandHandler("help", handlers.cmd_help))
+    app.add_handler(CommandHandler("stats", handlers.cmd_stats))
+    app.add_handler(CommandHandler("users", handlers.cmd_users))
+    app.add_handler(CommandHandler("broadcast", handlers.cmd_broadcast))
+    app.add_handler(CommandHandler("update", handlers.cmd_update))
+    app.add_handler(CallbackQueryHandler(handlers.on_quality, pattern=r"^dl\|"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_link))
+    app.add_handler(MessageHandler(filters.Caption, handlers.handle_link))
 
 
 def main():
@@ -71,15 +79,7 @@ def main():
         .build()
     )
 
-    app.add_handler(CommandHandler("start", handlers.cmd_start))
-    app.add_handler(CommandHandler("help", handlers.cmd_help))
-    app.add_handler(CommandHandler("stats", handlers.cmd_stats))
-    app.add_handler(CommandHandler("users", handlers.cmd_users))
-    app.add_handler(CommandHandler("broadcast", handlers.cmd_broadcast))
-    app.add_handler(CommandHandler("update", handlers.cmd_update))
-    app.add_handler(CallbackQueryHandler(handlers.on_quality, pattern=r"^dl\|"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_link))
-    app.add_handler(MessageHandler(filters.Caption, handlers.handle_link))
+    register_handlers(app)
 
     log.info("جاري تشغيل البوت... 🎬")
     app.run_polling(drop_pending_updates=True, allowed_updates=["message", "callback_query"])

@@ -25,7 +25,13 @@ COOKIES_FILE = os.getenv("COOKIES_FILE", "cookies.txt").strip()
 DATA_DIR = os.getenv("DATA_DIR", "data")
 DOWNLOAD_DIR = os.path.join(DATA_DIR, "downloads")
 
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+try:
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+except OSError:
+    # بيئة قراءة فقط (زي Vercel) — نستخدم /tmp المؤقت
+    DATA_DIR = "/tmp/migo-data"
+    DOWNLOAD_DIR = os.path.join(DATA_DIR, "downloads")
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 
 def validate():

@@ -107,7 +107,31 @@ git push -u origin main
 5. ضيف متغير البيئة `BOT_TOKEN` (و `ADMIN_IDS` اختياري)
 6. ⚠️ الخطة المجانية بتُسَيِّب الخدمة بعد 15 دقيقة سكون — اعمل مراقبة مجانية على **UptimeRobot** تعمل ping كل 5 دقايق لرابط الخدمة (البوت بيرد عليها تلقائياً بمساعدة الـ keepalive المدمج)
 
-> المشروع فيه ملفات جاهزة لكل حتة: `Procfile` + `nixpacks.toml` (Railway) • `render.yaml` (Render) • `Dockerfile` (أي استضافة بتدعم Docker بأمر واحد: `docker compose up` أو `docker run`)
+### ▲ Vercel (مجاني بدون كارت — وضع Webhook)
+
+Vercel بيشتغل بطريقة Serverless — البوت هنا بيشتغل بوضع **الويبهوك** (كل رسالة بتوصله كطلب HTTP)، والمشروع جاهز ليه بالكامل من خلال `api/index.py`:
+
+1. https://vercel.com ← **Add New ← Project** ← اختار ريبو `Migo-Dawnloader-Bot`
+2. سيب كل إعدادات البناء زي ما هي — الـ runtime بيتكتشف تلقائياً
+3. من **Settings ← Environment Variables** ضيف:
+   | المتغير | القيمة |
+   |---|---|
+   | `BOT_TOKEN` | التوكن من BotFather |
+   | `ADMIN_IDS` | (اختياري) آيديك |
+4. اعمل **Redeploy** واستنى البناء يخلص
+5. **فعّل الويبهوك** — افتح في المتصفح:
+   ```
+   https://اسم-مشروعك.vercel.app/api?key=توكن-البوت-كامل
+   ```
+   لو ظهرلك `"result": "تم تفعيل الويبهوك ✅"` — البوت اشتغل 🎉
+
+⚠️ **حدود Vercel المجاني (مهمة):**
+- كل عملية محدودة بـ **60 ثانية** — الفيديوهات الطويلة/الكبيرة هتفشل (حد الحجم اتظبط تلقائياً على 25MB على فيرسيل)
+- أول رسالة بعد فترة سكون بتاخد وقت زيادة (Cold Start)
+- زرار MP3 شغال حقيقي — البوت بينزّل ffmpeg تلقائياً أول مرة
+- للتحميل الكثير استخدم Railway أو Kerit كحل دائم
+
+> المشروع فيه ملفات جاهزة لكل حتة: `Procfile` + `nixpacks.toml` (Railway) • `render.yaml` (Render) • `vercel.json` + `api/index.py` (Vercel) • `Dockerfile` (أي استضافة بتدعم Docker بأمر واحد: `docker compose up` أو `docker run`)
 
 ## 👑 أوامر الأدمن
 
@@ -150,18 +174,23 @@ git push -u origin main
 | يوتيوب "Sign in to confirm" | ضيف ملف `cookies.txt` جنب الكود |
 | انستجرام بيرفض | المحتوى العام أول بأول — للخاص ضيف كوكيز |
 | فيديو أكبر من 50MB | اختار جودة أقل أو MP3 من الأزرار |
+| فيرسيل: `PYTHON_ENTRYPOINT_NOT_FOUND` | اتمصلح في النسخة الحالية (`api/index.py`) — اسحب آخر تحديث |
+| فيرسيل: البوت مش بيرد | افتح `/api?key=توكن-البوت` مرة واحدة لتفعيل الويبهوك |
+| فيرسيل: الفيديو بيفشل | الفيديو أطول من 60 ثانية (حد الخطة المجانية) — استخدم جودة أقل أو MP3 |
 
 ## 📁 ملفات المشروع
 
 ```
-bot.py          ← نقطة التشغيل (من هنا البوت بيشتغل)
+bot.py          ← نقطة التشغيل (وضع Polling العادي)
+api/index.py    ← نقطة دخول Vercel (وضع Webhook)
 handlers.py     ← معالجات الرسايل والأزرار
-downloader.py   ← محرك التحميل (yt-dlp)
+downloader.py   ← محرك التحميل (yt-dlp + ffmpeg تلقائي)
 sender.py       ← إرسال الملفات على تليجرام
 stats.py        ← الإحصائيات (JSON)
 antispam.py     ← الحماية من السبام
 config.py       ← قراءة الإعدادات
 strings.py      ← كل نصوص الرسايل بالعربي
 utils.py        ← أدوات مساعدة
+vercel.json     ← إعدادات Vercel (ذاكرة + مدة الدالة)
 .env.example    ← قالب ملف الإعدادات
 ```

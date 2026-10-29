@@ -9,7 +9,7 @@ import shutil
 import time
 import uuid
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.error import BadRequest, TelegramError
 from telegram.ext import ContextTypes
 
@@ -30,6 +30,12 @@ ACTIVE = set()     # مستخدمين عندهم تحميل شغال حاليا�
 BOT_USERNAME = ""  # بيتحدد تلقائياً عند التشغيل
 
 URL_RE = re.compile(r"(https?://[^\s<>\"']+|www\.[^\s<>\"']+)", re.I)
+
+BOT_COMMANDS = [
+    BotCommand("start", "تشغيل البوت"),
+    BotCommand("help", "طريقة الاستخدام"),
+    BotCommand("stats", "إحصائيات التحميل"),
+]
 
 
 def _is_admin(user_id):
@@ -141,11 +147,14 @@ async def _show_quality_menu(status, url, info, user):
     dur = fmt_duration(info.get("duration"))
     uploader = html.escape(str(info.get("uploader") or "")[:60])
 
+    link = html.escape(str(info.get("webpage_url") or url))
     cap = f"{platform.emoji} <b>{platform.name}</b>\n🎬 {title}"
     if dur and dur != "—":
         cap += f"\n⏱ المدة: {dur}"
     if uploader:
         cap += f"\n👤 {uploader}"
+    # اللينك في الرسالة عشان نقدر نسترجعه لو السيرفر أعاد التشغيل (زي على Vercel)
+    cap += f"\n🔗 <code>{link}</code>"
     cap += "\n\n👇 <b>اختار الجودة:</b>"
 
     def btn(label, quality):
@@ -184,12 +193,18 @@ async def on_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer()
         return
 
-    job = PENDING.get(req_id)
     msg = q.message
+    job = PENDING.get(req_id)
     if not job:
-        await q.answer()
-        await _progress_edit(msg, strings.EXPIRED)
-        return
+        # لو السيرفر أعاد التشغيل (زي على Vercel) — نسترجع اللينك من الرسالة نفسها
+        menu_text = (getattr(msg, "caption", None) or getattr(msg, "text", None) or "")
+        recovered = URL_RE.search(menu_text)
+        if not recovered:
+            await q.answer()
+            await _progress_edit(msg, strings.EXPIRED)
+            return
+        job = {"url": recovered.group(1), "user_id": q.from_user.id, "ttl": time.time() + PENDING_TTL}
+        PENDING[req_id] = job
     if q.from_user.id != job["user_id"]:
         await q.answer(strings.NOT_YOURS, show_alert=True)
         return
