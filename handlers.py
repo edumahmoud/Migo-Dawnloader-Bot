@@ -73,6 +73,10 @@ async def _progress_edit(msg, text):
 # ─────────────────────── الأوامر الأساسية ───────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user:
+        # تسجيل المستخدم من غير عد تحميل — عشان تاريخ الاشتراك والإذاعي يوصل للكل
+        stats.touch_user(user.id, user.full_name or "", username=user.username or "")
     await update.effective_message.reply_text(strings.WELCOME, disable_web_page_preview=True)
 
 
@@ -87,6 +91,8 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not msg or not user:
         return
+    # تسجيل المستخدم حتى لو بعت لينك من غير /start
+    stats.touch_user(user.id, user.full_name or "", username=user.username or "")
     text = msg.text or msg.caption or ""
     m = URL_RE.search(text)
     if not m:
@@ -314,7 +320,7 @@ async def on_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await send_video_file(msg, path, result, caption, thumb_url=result.get("thumbnail"))
 
-        stats.record(user.id, user.first_name or "", platform.name)
+        stats.record(user.id, user.full_name or "", platform.name, username=user.username or "")
         await stats.maybe_sync(context.bot)  # نسخة احتياطية للإحصائيات في قناة التخزين
         elapsed = max(1, int(time.time() - start))
         # العدد شامل التحميل ده لأن record اتعملت لسه — عشان يظهر "ده تحميلك رقم كام"
@@ -395,7 +401,7 @@ async def _run_carousel(status, url, user, count):
             await send_video_file(status, v, {}, caption)
             sent += 1
 
-        stats.record(user.id, user.first_name or "", platform.name)
+        stats.record(user.id, user.full_name or "", platform.name, username=user.username or "")
         await stats.maybe_sync(status.get_bot())  # نسخة احتياطية للإحصائيات
         await _progress_edit(status, f"🎉 <b>خلصنا!</b> اتبعت <b>{sent}</b> ملف جاهزين 🎊")
 

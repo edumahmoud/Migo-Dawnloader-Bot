@@ -1,6 +1,7 @@
 """كل رسايل البوت بالعربي المصري في مكان واحد 🇪🇬✨"""
 import html
 
+import config
 from utils import LINE, fmt_size
 
 WELCOME = (
@@ -84,11 +85,14 @@ def playlist_hint(n):
     )
 
 
-def too_big(size):
+def too_big(size=None, limit=None):
+    """رسالة تجاوز الحد — الحد بيتقرا من config.MAX_FILE_MB (ديناميكياً مش ثابت 50)"""
+    lim = limit or config.MAX_FILE_MB
+    size_line = f"📦 حجم الملف: <b>{size}</b>\n" if size else ""
     return (
         "🚫 <b>الملف أكبر من الحد المسموح!</b>\n\n"
-        f"📦 حجم الملف: <b>{size}</b>\n"
-        "⚠️ تليجرام بيسمح للبوتات بحد أقصى <b>50MB</b> للملف.\n\n"
+        f"{size_line}"
+        f"⚠️ تليجرام بيسمح للبوتات بحد أقصى <b>{lim}MB</b> للملف.\n\n"
         f"{LINE}\n"
         "🟩 <b>الحلول:</b>\n"
         "1️⃣ جرب جودة أقل (720p أو 480p)\n"
@@ -180,8 +184,11 @@ FFMPEG_ERR = (
 
 
 def error_for(e):
-    """ترجمة أخطاء yt-dlp لرسايل مفهومة"""
+    """ترجمة أخطاء yt-dlp وتليجرام لرسايل مفهومة"""
     s = str(e).lower()
+    # تليجرام نفسه رفض الرفع (413) — لو الملف عدّى الفحص واترفض وقت الرفع
+    if "entity too large" in s or "file is too big" in s or "payload too large" in s:
+        return too_big()
     if "private" in s:
         return PRIVATE_ERR
     if "login" in s or "cookies" in s or "sign in" in s or "authentication" in s or "confirm you" in s:

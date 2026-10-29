@@ -55,15 +55,39 @@ class Stats:
         except Exception:
             pass
 
-    def record(self, user_id, name, platform):
+    def _now(self):
+        return time.strftime("%Y-%m-%d %H:%M")
+
+    def record(self, user_id, name, platform, username=""):
+        """تسجيل تحميل — بياخد الاسم الكامل + اليوزرنيم ويحفظ تاريخ أول استخدام"""
         with self.lock:
+            now = self._now()
             self.data["total"] += 1
             self.data["platforms"][platform] = self.data["platforms"].get(platform, 0) + 1
             u = self.data["users"].setdefault(str(user_id), {"name": "", "count": 0})
             u["name"] = name or u.get("name") or ""
+            if username:
+                u["username"] = username
+            u.setdefault("since", now)   # تاريخ الاشتراك = أول مرة استخدم البوت
+            u["last"] = now              # آخر نشاط
             u["count"] += 1
             day = time.strftime("%Y-%m-%d")
             self.data["days"][day] = self.data["days"].get(day, 0) + 1
+            self._save()
+
+    def touch_user(self, user_id, name, username=""):
+        """تسجيل مستخدم من غير تحميل (عند /start مثلاً) — عشان نعرف تاريخ اشتراكه
+
+        وبيخلّي الإذاعي (broadcast) يوصل لكل اللي فتحوا البوت حتى لو ما حملوش حاجة.
+        """
+        with self.lock:
+            now = self._now()
+            u = self.data["users"].setdefault(str(user_id), {"name": "", "count": 0})
+            u["name"] = name or u.get("name") or ""
+            if username:
+                u["username"] = username
+            u.setdefault("since", now)
+            u["last"] = now
             self._save()
 
     def user_ids(self):
@@ -85,6 +109,26 @@ class Stats:
         with self.lock:
             u = self.data["users"].get(str(user_id))
             return int((u or {}).get("count", 0))
+
+    def _period_sum(self, days_since):
+        """مجموع تحميلات آخر N يوم (شامل النهارده)"""
+        import datetime
+        today = datetime.date.today()
+        return sum(
+            int(self.data["days"].get((today - datetime.timedelta(days=i)).isoformat(), 0))
+            for i in range(days_since)
+        )
+
+    def week_count(self):
+        """تحميلات آخر 7 أيام"""
+        with self.lock:
+            return self._period_sum(7)
+
+    def month_count(self):
+        """تحميلات الشهر الحالي (من أول الشهر لليوم)"""
+        with self.lock:
+            prefix = time.strftime("%Y-%m")
+            return sum(int(v) for k, v in self.data["days"].items() if str(k).startswith(prefix))
 
     def snapshot(self):
         """نسخة كاملة من البيانات (للوحة الويب) — آمنة للقراءة من أي حتة"""
@@ -165,12 +209,17 @@ class Stats:
             total = self.data["total"]
             platforms = dict(self.data["platforms"])
             users = dict(self.data["users"])
+            days = dict(self.data["days"])
         n_users = len(users)
-        days = dict(self.data.get("days") or {})
         today = days.get(time.strftime("%Y-%m-%d"), 0)
+        prefix = time.strftime("%Y-%m")
+        month = sum(int(v) for k, v in days.items() if str(k).startswith(prefix))
+        week = self._period_sum(7)
         lines = ["📊 <b>إحصائيات البوت</b> 📈", LINE, ""]
         lines.append(f"⬇️ إجمالي التحميلات: <b>{total}</b>")
         lines.append(f"🔥 تحميلات النهارده: <b>{today}</b>")
+        lines.append(f"📅 تحميلات الأسبوع (٧ أيام): <b>{week}</b>")
+        lines.append(f"🗓 تحميلات الشهر ده: <b>{month}</b>")
         lines.append(f"👥 عدد المستخدمين: <b>{n_users}</b>")
         if n_users:
             avg = total / n_users
@@ -182,14 +231,18 @@ class Stats:
             for i, (name, cnt) in enumerate(ranked):
                 medal = MEDALS[i] if i < 3 else "▫️"
                 lines.append(f"{medal} {name}: <b>{cnt}</b>")
-        if full and users:
-            lines.append("")
-            lines.append("🏆 <b>أكثر المستخدمين:</b>")
-            top = sorted(users.items(), key=lambda kv: -kv[1].get("count", 0))[:10]
-            for i, (uid, u) in enumerate(top, 1):
-                nm = html.escape(str(u.get("name") or "مستخدم"))
-                medal = MEDALS[i - 1] if i <= 3 else f"{i}."
-                lines.append(f"{medal} {nm} — <b>{u.get('count', 0)}</b> 📥")
+        if full:
+            active = [(uid, u) for uid, u in users.items() if int(u.get("count", 0)) > 0]
+            if active:
+                lines.append("")
+                lines.append("🏆 <b>أكثر المستخدمين:</b>")
+                top = sorted(active, key=lambda kv: -kv[1].get("count", 0))[:10]
+                for i, (uid, u) in enumerate(top, 1):
+                    nm = html.escape(str(u.get("name") or "مستخدم"))
+                    un = u.get("username")
+                    who = nm + (f" (@{html.escape(str(un))})" if un else "")
+                    medal = MEDALS[i - 1] if i <= 3 else f"{i}."
+                    lines.append(f"{medal} {who} — <b>{u.get('count', 0)}</b> 📥")
         if bot_username:
             lines.append("")
             lines.append(LINE)

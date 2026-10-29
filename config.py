@@ -18,7 +18,8 @@ def _ids(raw):
 
 ADMIN_IDS = _ids(os.getenv("ADMIN_IDS", ""))
 PANEL_KEY = os.getenv("PANEL_KEY", "").strip()  # مفتاح لوحة الإحصائيات على الموقع (لو فاضي: توكن البوت)
-MAX_FILE_MB = int(os.getenv("MAX_FILE_MB", "48") or 48)
+# حد تليجرام الحقيقي للبوتات = 50 ميجا للملف الواحد (50 * 1024 * 1024 بايت)
+MAX_FILE_MB = int(os.getenv("MAX_FILE_MB", "50") or 50)
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "5") or 5)
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "30") or 30)
 MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT", "3") or 3)
