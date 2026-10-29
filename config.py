@@ -17,11 +17,28 @@ def _ids(raw):
 
 
 ADMIN_IDS = _ids(os.getenv("ADMIN_IDS", ""))
+PANEL_KEY = os.getenv("PANEL_KEY", "").strip()  # مفتاح لوحة الإحصائيات على الموقع (لو فاضي: توكن البوت)
 MAX_FILE_MB = int(os.getenv("MAX_FILE_MB", "48") or 48)
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "5") or 5)
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "30") or 30)
 MAX_CONCURRENT = int(os.getenv("MAX_CONCURRENT", "3") or 3)
 COOKIES_FILE = os.getenv("COOKIES_FILE", "cookies.txt").strip()
+
+
+def _chat_id(raw):
+    """قراءة آيدي قناة/جروب من البيئة (زي -1001234567890) — بيرجع 0 لو مش صالح"""
+    raw = (raw or "").strip()
+    if raw.lstrip("-").isdigit():
+        try:
+            return int(raw)
+        except ValueError:
+            return 0
+    return 0
+
+
+# قناة التخزين الدائم للإحصائيات (اختياري — عشان الأرقام ماتتصفرش على Vercel)
+STATS_CHAT_ID = _chat_id(os.getenv("STATS_CHAT_ID", ""))
+
 DATA_DIR = os.getenv("DATA_DIR", "data")
 DOWNLOAD_DIR = os.path.join(DATA_DIR, "downloads")
 

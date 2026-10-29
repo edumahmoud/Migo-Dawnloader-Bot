@@ -10,6 +10,7 @@ from telegram.ext import (AIORateLimiter, ApplicationBuilder, CallbackQueryHandl
 
 import config
 import handlers
+import stats
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +47,8 @@ async def post_init(app):
     me = await app.bot.get_me()
     handlers.BOT_USERNAME = me.username or ""
     await app.bot.set_my_commands(handlers.BOT_COMMANDS)
+    # استرجاع الإحصائيات الدائمة من قناة التخزين (لو STATS_CHAT_ID متظبط)
+    await stats.stats.load_from_telegram(app.bot)
     log.info("Bot started as @%s 🚀", me.username)
 
 

@@ -1,11 +1,13 @@
 """نقطة دخول Vercel — البوت في وضع الويبهوك (ASGI)
 
+- GET  / أو /stats → لوحة إحصائيات الويب (محمية بمفتاح)
 - GET  /api            → فحص صحة البوت (لو فيه عطب بيقول السبب بالتفصيل)
 - GET  /api?key=TOKEN  → تفعيل الويبهوك (تتصل مرة واحدة بعد النشر)
 - POST /api            → تحديثات تليجرام
 """
 import asyncio
 import hashlib
+import hmac
 import json
 import os
 import traceback
@@ -20,6 +22,8 @@ _boot_error = None
 try:
     import config  # noqa: E402
     import handlers  # noqa: E402
+    import panel  # noqa: E402
+    import stats  # noqa: E402
     from bot import build_application, register_handlers  # noqa: E402
     from downloader import ensure_ffmpeg  # noqa: E402
     from telegram import Update  # noqa: E402
@@ -47,6 +51,8 @@ async def get_application():
                 await app.initialize()
                 # نفس اللي بيعمله post_init في وضع التشغيل المباشر — اسم البوت للرسايل
                 handlers.BOT_USERNAME = app.bot.username or ""
+                # استرجاع الإحصائيات الدائمة من قناة التخزين (لو متظبطة)
+                await stats.stats.load_from_telegram(app.bot)
                 _app_instance = app
     return _app_instance
 
@@ -81,6 +87,15 @@ async def _respond(send, status, payload):
     await send({"type": "http.response.body", "body": data})
 
 
+async def _respond_html(send, html_text, status=200):
+    await send({
+        "type": "http.response.start",
+        "status": status,
+        "headers": [(b"content-type", b"text/html; charset=utf-8")],
+    })
+    await send({"type": "http.response.body", "body": html_text.encode("utf-8")})
+
+
 async def app(scope, receive, send):
     if scope["type"] != "http":
         return
@@ -96,8 +111,30 @@ async def app(scope, receive, send):
         })
         return
 
+    # لوحة الإحصائيات على الموقع — / أو /stats (محمية بمفتاح)
+    if method == "GET" and path in ("", "/", "/stats", "/panel"):
+        from urllib.parse import parse_qs
+        qs = parse_qs(scope.get("query_string", b"").decode("utf-8", "ignore"))
+        key = (qs.get("key") or [""])[0]
+        # المفتاح الصحيح: PANEL_KEY (لو متظبط) أو توكن البوت نفسه
+        key_ok = bool(key) and (
+            (bool(config.BOT_TOKEN) and hmac.compare_digest(key, config.BOT_TOKEN))
+            or (bool(config.PANEL_KEY) and hmac.compare_digest(key, config.PANEL_KEY))
+        )
+        bot_username, storage_on = "", False
+        try:
+            await get_application()  # بيتأكد كمان إن الإحصائيات اتحملت من قناة التخزين
+            bot_username = handlers.BOT_USERNAME
+            storage_on = bool(stats.stats.storage_chat)
+        except Exception:  # noqa: BLE001 — اللوحة تشتغل حتى لو البوت نفسه فيه مشكلة توكن
+            pass
+        await _respond_html(send, panel.render_panel(
+            stats.stats, bot_username=bot_username, storage_on=storage_on, authorized=key_ok,
+        ))
+        return
+
     # فحص الصحة + تفعيل الويبهوك
-    if method == "GET" and path in ("", "/api", "/api/index"):
+    if method == "GET" and path in ("/api", "/api/index"):
         from urllib.parse import parse_qs
         qs = parse_qs(scope.get("query_string", b"").decode("utf-8", "ignore"))
         if config.BOT_TOKEN and (qs.get("key") or [""])[0] == config.BOT_TOKEN:

@@ -315,6 +315,7 @@ async def on_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_video_file(msg, path, result, caption, thumb_url=result.get("thumbnail"))
 
         stats.record(user.id, user.first_name or "", platform.name)
+        await stats.maybe_sync(context.bot)  # نسخة احتياطية للإحصائيات في قناة التخزين
         elapsed = max(1, int(time.time() - start))
         # العدد شامل التحميل ده لأن record اتعملت لسه — عشان يظهر "ده تحميلك رقم كام"
         personal = stats.user_downloads(user.id)
@@ -395,6 +396,7 @@ async def _run_carousel(status, url, user, count):
             sent += 1
 
         stats.record(user.id, user.first_name or "", platform.name)
+        await stats.maybe_sync(status.get_bot())  # نسخة احتياطية للإحصائيات
         await _progress_edit(status, f"🎉 <b>خلصنا!</b> اتبعت <b>{sent}</b> ملف جاهزين 🎊")
 
     except asyncio.TimeoutError:
