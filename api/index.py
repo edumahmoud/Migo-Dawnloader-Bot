@@ -101,7 +101,7 @@ async def app(scope, receive, send):
     if method == "GET" and path in ("", "/api", "/api/index"):
         from urllib.parse import parse_qs
         qs = parse_qs(scope.get("query_string", b"").decode("utf-8", "ignore"))
-        if (qs.get("key") or [""])[0] == config.BOT_TOKEN:
+        if config.BOT_TOKEN and (qs.get("key") or [""])[0] == config.BOT_TOKEN:
             try:
                 app_ = await get_application()
                 host = _headers(scope).get("host", "")
@@ -118,9 +118,14 @@ async def app(scope, receive, send):
                 await _respond(send, 500, {"error": str(e)[:300]})
         else:
             await _respond(send, 200, {
-                "status": "ok",
+                "status": "ok" if config.BOT_TOKEN else "⚠️ ناقص توكن",
                 "bot": "Migo Downloader 🤖",
-                "hint": "افتح /api?key=توكن-البوت لتفعيل الويبهوك",
+                "token_configured": bool(config.BOT_TOKEN),
+                "hint": (
+                    "افتح /api?key=توكن-البوت لتفعيل الويبهوك"
+                    if config.BOT_TOKEN else
+                    "⚠️ ضيف BOT_TOKEN في Settings → Environment Variables → اعمل Redeploy"
+                ),
             })
         return
 
